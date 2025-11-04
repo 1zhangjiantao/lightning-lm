@@ -63,27 +63,35 @@ struct NavState {
         Vec3d a_inertial = rot_ * (acce - ba_);  // 加计读数-ba 并转到 世界系下
 
         for (int i = 0; i < 3; i++) {
-            res(i) = vel_[i];
-            res(i + 3) = omega[i];
-            res(i + 12) = a_inertial[i] + grav_[i];
+            res(i) = vel_[i];//位置的导数
+            res(i + 3) = omega[i];//角度的导数
+            res(i + 12) = a_inertial[i] + grav_[i];//速度的导数
         }
         return res;
     }
 
     /// 运动方程对状态的雅可比
+    /*
+    //这是名义状态运动方程对名义状态的导数  
+    R(t+dt) = R(t) exp(ω dt)（离散时间）。由于姿态的演化仅依赖于角速度ω，与自身姿态R无关，因此名义姿态对自身的导数为零（无需显式赋值）
+    有的F矩阵中
+    这里的F_：是误差状态（error state）的离散传递矩阵，描述的是误差状态的演化对误差状态本身的影响。误差状态中的姿态误差δθ（李代数元素，属于向量空间）的演化不仅依赖于角速度误差，
+    还因 SO (3) 的非交换性而依赖于自身（即δθ会影响下一时刻的δθ），因此姿态误差对自身的雅可比非零，必须显式计算
+    */
+    
     inline Eigen::Matrix<double, full_dim, dim> df_dx(const Vec3d& acce) const {
         Eigen::Matrix<double, full_dim, dim> cov = Eigen::Matrix<double, full_dim, dim>::Zero();
-        cov.block<3, 3>(0, 12) = Mat3d::Identity();
+        cov.block<3, 3>(0, 12) = Mat3d::Identity();//位移对速度
         Vec3d acc = acce - ba_;
         // Vec3d omega = gyro - bg_;
-        cov.block<3, 3>(12, 3) = -rot_.matrix() * SO3::hat(acc);
-        cov.block<3, 3>(12, 18) = -rot_.matrix();
+        cov.block<3, 3>(12, 3) = -rot_.matrix() * SO3::hat(acc);//速度对姿态
+        cov.block<3, 3>(12, 18) = -rot_.matrix();//速度对加速度零偏
 
         Vec2d vec = Vec2d::Zero();
         Eigen::Matrix<double, 3, 2> grav_matrix = grav_.S2_Mx(vec);
 
-        cov.block<3, 2>(12, 21) = grav_matrix;
-        cov.block<3, 3>(3, 15) = -Eigen::Matrix3d::Identity();
+        cov.block<3, 2>(12, 21) = grav_matrix;//速度对重力
+        cov.block<3, 3>(3, 15) = -Eigen::Matrix3d::Identity();//姿态对角速度零偏
         return cov;
     }
 

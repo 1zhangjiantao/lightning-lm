@@ -13,52 +13,55 @@ void ESKF::Predict(const double& dt, const ESKF::ProcessNoiseType& Q, const Vec3
     Eigen::Matrix<double, 24, 12> f_w_ = x_.df_dw();
     Eigen::Matrix<double, 23, process_noise_dim_> f_w_final;
 
-    NavState x_before = x_;
+    NavState x_before = x_;//保存当前状态并更新名义状态
     x_.oplus(f_, dt);
 
-    F_x1_ = CovType::Identity();
+    F_x1_ = CovType::Identity();//初始化 误差状态传递矩阵
 
     // set f_x_final
     CovType f_x_final;  // 23x23
     for (auto st : x_.vect_states_) {
-        int idx = st.idx_;
-        int dim = st.dim_;
-        int dof = st.dof_;
-
+        int idx = st.idx_;// 状态在误差向量中的索引（如速度在误差状态中的起始索引）
+        int dim = st.dim_;// 状态在f_中的维度索引（如速度在f_中的起始维度）
+        int dof = st.dof_;// 状态自由度（如速度是3维）
+        // 填充运动方程对状态的雅可比（向量状态部分）
         for (int i = 0; i < 23; i++) {
             for (int j = 0; j < dof; j++) {
                 f_x_final(idx + j, i) = f_x_(dim + j, i);
             }
         }
-
+        // 填充运动方程对噪声的雅可比（向量状态部分）
         for (int i = 0; i < process_noise_dim_; i++) {
             for (int j = 0; j < dof; j++) {
                 f_w_final(idx + j, i) = f_w_(dim + j, i);
             }
         }
     }
-
+    //处理 SO (3) 流形状态的雅可比（如姿态、外参姿态）
     Mat3d res_temp_SO3;
     Vec3d seg_SO3;
     for (auto st : x_.SO3_states_) {
-        int idx = st.idx_;
-        int dim = st.dim_;
+        int idx = st.idx_;// SO(3)状态在误差向量中的索引（如姿态误差的起始索引）
+        int dim = st.dim_;// SO(3)状态在f_中的维度索引（如姿态变化率在f_中的起始维度）
+        // 提取SO(3)状态的变化量（f_中对应维度 × dt），并取负（用于后续BCH近似）
         for (int i = 0; i < 3; i++) {
             seg_SO3(i) = -1 * f_(dim + i) * dt;
         }
-
+        // 计算SO(3)误差状态的传递矩阵块（对应F_x1_中姿态误差对自身的导数）
+        // math::exp(seg_SO3, 0.5) 是基于BCH近似的指数映射（半角公式，提高精度）
         F_x1_.block<3, 3>(idx, idx) = math::exp(seg_SO3, 0.5).matrix();
-
+        // 计算SO(3)流形上的导数修正矩阵（A矩阵，用于雅可比转换）
         res_temp_SO3 = math::A_matrix(seg_SO3);
+         // 修正运动方程对状态的雅可比（SO(3)状态部分）
         for (int i = 0; i < state_dim_; i++) {
             f_x_final.template block<3, 1>(idx, i) = res_temp_SO3 * (f_x_.block<3, 1>(dim, i));
         }
-
+       
         for (int i = 0; i < process_noise_dim_; i++) {
             f_w_final.template block<3, 1>(idx, i) = res_temp_SO3 * (f_w_.block<3, 1>(dim, i));
         }
     }
-
+    // 处理 S2 球面状态的雅可比（如重力向量）
     Eigen::Matrix<double, 2, 3> res_temp_S2;
     Vec3d seg_S2;
     for (auto st : x_.S2_states_) {

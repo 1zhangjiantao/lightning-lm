@@ -325,7 +325,7 @@ void PGOImpl::AddLidarLocFactors() {
     loc_obs_info(4, 4) *= loc_obs_weight[4];
     loc_obs_info(5, 5) *= loc_obs_weight[5];
 
-    auto e = std::make_shared<miao::EdgeSE3Prior>();
+    auto e = std::make_shared<miao::EdgeSE3Prior>();//先验
     e->SetVertex(0, optimizer_->GetVertex(current_frame_->frame_id_));
     e->SetMeasurement(loc_obs_pose);
     e->SetInformation(loc_obs_info);

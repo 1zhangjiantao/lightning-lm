@@ -120,7 +120,14 @@ class TiledMap {
         bool ndt_estimated_ = false;  // NDT是否已经估计
         int num_pts_ = 0;             // 总共的点数，用于更新估计
     };
+    /*
+        std::unordered_map 的模板参数结构
+        它的完整模板定义是：template <class Key, class T, class Hash = std::hash<Key>, ...>
 
+            第 1 个参数 Key：键的类型（你这里是 Vec2i，用来唯一标识每个 MapChunk）；
+            第 2 个参数 T：值的类型（你这里是 std::shared_ptr<MapChunk>，即要存储的地图块对象）；
+            第 3 个参数 Hash：哈希函数类型（你这里是 math::hash_vec<2>，因为 std::hash 不默认支持 Vec2i，需要自定义哈希函数来计算 Vec2i 的哈希值，否则 unordered_map 无法工作
+    */
     using GridHashMap = std::unordered_map<KeyType, VoxelData, math::hash_vec<3>>;
     using ChunkHashMap = std::unordered_map<Vec2i, std::shared_ptr<MapChunk>, math::hash_vec<2>>;
 
